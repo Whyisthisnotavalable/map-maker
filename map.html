@@ -1,0 +1,686 @@
+<html>
+<head>
+    <title>Map editor</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap');
+        html {
+            font-family: "Chakra Petch" !important; /* Pusheen font :> */
+            font-size: small;
+        }
+        #canvas {
+            top: 0;
+            left: 0;
+            position: absolute;
+            background-color: #dcdbdb;
+            z-index: 0;
+        }
+        #toolbar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 3em;
+            background-color: rgba(68, 68, 68, 0.8);
+            display: flex;
+            z-index: 1;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-evenly;
+            transition-duration: 100ms;
+        }
+        #toolbar:hover {
+            height: 3em;
+        }
+        #toolbar > span {
+            padding: 0.5em;
+            color: white;
+            background-color: gray;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #toolbar > span.active {
+            background-color: #444;
+        }
+        #toolbar > span:hover {
+            background-color: darkgray;
+        }
+        button {
+            color: white;
+            padding: 0.5em;
+            border: 0px solid transparent;
+            background-color: gray;
+            border-radius: 5px;
+            font-family: "Chakra Petch" !important;
+        }
+        button:hover {
+            background-color: darkgray;
+        }
+        button:active {
+            background-color: lightgray;
+        }
+        #dropdown {
+            padding: 0.5em;
+            color: white;
+            background-color: gray;
+            border: 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: "Chakra Petch" !important;
+        }
+        #dropdown:hover {
+            background-color: darkgray;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button onclick="swap()">↕</button>
+        <span id="zoom"></span>
+        <span id="select">Object Select</span>
+        <select id="dropdown">
+            <option value="none">Object Type</option>
+            <option value="map">Map (0)</option>
+            <option value="body">Body (0)</option>
+            <option value="mob">Mob (0)</option>
+            <option value="spinner">Spinner (0)</option>
+            <option value="rotor">Rotor (0)</option>
+            <!-- <option value="boost">Boost (0)</option> -->
+            <option value="elevator">Elevator (0)</option>
+            <option value="vanish">Vanish (0)</option>
+            <!-- <option value="drip">Drip (0)</option> -->
+            <option value="hazard">Hazard (0)</option>
+            <option value="mover">Mover (0)</option>
+        </select>
+        <button id="export" onclick="extract()">Export</button>
+    </div>
+    <canvas id="canvas"></canvas>
+</body>
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let isPanning = false;
+let isDragging = false;
+let startX, startY;
+let translateX = 0, translateY = 0;
+let offsetX = 0, offsetY = 0;
+let cursor = { x: 0, y: 0, inGame: {x: 0, y: 0}};
+let scale = 1;
+const zoomSensitivity = 0.001;
+const maxZoom = 5;
+const minZoom = 0.2;
+
+let color = {
+    block: "rgba(140,140,140,0.85)",
+    blockS: "#222",
+    map: "#444",
+    bullet: "#000"
+}
+
+let selectedState = null;
+let selectedItem = null;
+let map = [];
+let body = [];
+let mob = [];
+// let misc = {
+//     spinner: [], //body
+//     rotor: [], //body
+//     boost: [], //map
+//     elevator: [], //body
+//     vanish: [], //special - body
+//     drip: [], //cosmetic
+//     hazard: [], //special - body
+//     mover: [], //special - body
+// };
+let door = {
+    enter: {
+        x: 0, 
+        y: 0,         
+        draw() {
+            ctx.beginPath();
+            ctx.moveTo(door.enter.x, door.enter.y + 30);
+            ctx.lineTo(door.enter.x, door.enter.y - 80);
+            ctx.bezierCurveTo(door.enter.x, door.enter.y - 170, door.enter.x + 100, door.enter.y - 170, door.enter.x + 100, door.enter.y - 80);
+            ctx.lineTo(door.enter.x + 100, door.enter.y + 30);
+            ctx.lineTo(door.enter.x, door.enter.y + 30);
+            ctx.fillStyle = "#ccc";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = "#CCCCCC55"
+            ctx.strokeStyle = "#ccc";
+            ctx.lineWidth = 2;
+            ctx.moveTo(door.enter.x, door.enter.y + 30);
+            ctx.arc(door.enter.x, door.enter.y, 30, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        }
+    }, 
+    exit: {
+        x: 0, 
+        y: 0,
+        draw() {
+            ctx.beginPath();
+            ctx.moveTo(door.exit.x, door.exit.y + 30);
+            ctx.lineTo(door.exit.x, door.exit.y - 80);
+            ctx.bezierCurveTo(door.exit.x, door.exit.y - 170, door.exit.x + 100, door.exit.y - 170, door.exit.x + 100, door.exit.y - 80);
+            ctx.lineTo(door.exit.x + 100, door.exit.y + 30);
+            ctx.lineTo(door.exit.x, door.exit.y + 30);
+            ctx.fillStyle = "#0ff";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = "#00FFFF55";
+            ctx.strokeStyle = "#0ff";
+            ctx.lineWidth = 2;
+            ctx.moveTo(door.exit.x, door.exit.y + 30);
+            ctx.arc(door.exit.x, door.exit.y, 30, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+    }
+let preview = null;
+
+function setupCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    ctx.font = "25px Arial";
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+}
+setupCanvas();
+window.onresize = () => setupCanvas();
+
+document.body.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+});
+let isRedrawing = false;
+canvas.addEventListener('mousemove', (e) => {
+    cursor.x = e.clientX;
+    cursor.y = e.clientY;
+    cursor.inGame.x = (e.clientX - translateX - offsetX) / scale;
+    cursor.inGame.y = (e.clientY - translateY - offsetY) / scale;
+
+    if (isPanning) {
+        offsetX = e.clientX - startX;
+        offsetY = e.clientY - startY;
+        loop();
+    }
+
+    if (selectedState && e.buttons === 1 && !isPanning) {
+        if (selectedState === 'select' && selectedItem) {
+            selectedItem.x = round(cursor.inGame.x - selectedItem.dragOffsetX, 12.5);
+            selectedItem.y = round(cursor.inGame.y - selectedItem.dragOffsetY, 12.5);
+        } else {
+            const x = Math.min(cursor.startX, cursor.inGame.x);
+            const y = Math.min(cursor.startY, cursor.inGame.y);
+            const width = Math.abs(cursor.inGame.x - cursor.startX);
+            const height = Math.abs(cursor.inGame.y - cursor.startY);
+            preview = { x: round(x), y: round(y), width: round(width), height: round(height)};
+        }
+        if (!isRedrawing) {
+            isRedrawing = true;
+            requestAnimationFrame(() => {
+                loop();
+                isRedrawing = false;
+            });
+        }
+    }
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    if (e.button === 2) {
+        isPanning = true;
+        startX = e.clientX - offsetX;
+        startY = e.clientY - offsetY;
+    } else if (e.button === 0) {
+        if (selectedState === 'select') {
+            selectedItem = findSelectedItem(cursor.inGame);
+            if (selectedItem) {
+                selectedItem.dragOffsetX = cursor.inGame.x - selectedItem.x;
+                selectedItem.dragOffsetY = cursor.inGame.y - selectedItem.y;
+                isDragging = true;
+            }
+        } else if (selectedState) {
+            handleMouseDown(e);
+        }
+    }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+    if (e.button === 2) {
+        isPanning = false;
+        translateX += offsetX;
+        translateY += offsetY;
+        offsetX = 0;
+        offsetY = 0;
+    } else if (e.button === 0) {
+        if (isDragging) {
+            isDragging = false;
+        } else if (selectedState && selectedState !== 'select') {
+            handleMouseUp(e);
+        }
+        preview = null;
+        loop();
+    }
+});
+
+let zooming = false;
+canvas.addEventListener('wheel', (e) => {
+    const zoomAmount = e.deltaY * zoomSensitivity;
+    const newScale = scale - zoomAmount;
+    if (newScale > maxZoom || newScale < minZoom) return;
+
+    const mouseX = e.clientX - canvas.width / 2;
+    const mouseY = e.clientY - canvas.height / 2;
+    translateX -= mouseX * (newScale - scale);
+    translateY -= mouseY * (newScale - scale);
+    scale = newScale;
+
+    if (!zooming) {
+        zooming = true;
+        requestAnimationFrame(() => {
+            loop();
+            zooming = false;
+        });
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && selectedItem) {
+        if (selectedItem.type === 'map') {
+            const index = selectedItem.index;
+            if (index > -1) {
+                map[index].x = selectedItem.x;
+                map[index].y = selectedItem.y;
+            }
+        } else if (selectedItem.type === 'body') {
+            const index = selectedItem.index;
+            if (index > -1) {
+                body[index].x = selectedItem.x;
+                body[index].y = selectedItem.y;
+            }
+        } else if (selectedItem.type === 'mob') {
+            const index = selectedItem.index;
+            if (index > -1) {
+                mob[index].x = selectedItem.x;
+                mob[index].y = selectedItem.y;
+            }
+        } else if (selectedItem.type === 'enter') {
+            door.enter.x = selectedItem.x;
+            door.enter.y = selectedItem.y;
+        } else if (selectedItem.type === 'exit') {
+            door.exit.x = selectedItem.x;
+            door.exit.y = selectedItem.y;
+        }
+
+        isDragging = false;
+        selectedItem.dragOffsetX = null;
+        selectedItem.dragOffsetY = null;
+        selectedItem = null;
+        loop(); 
+    }
+
+    if ((e.key === 'Backspace' || e.key === 'Delete') && selectedItem) {
+        if (selectedItem.type === 'map') {
+            const index = selectedItem.index;
+            if (index > -1) map.splice(index, 1);
+        } else if (selectedItem.type === 'body') {
+            const index = selectedItem.index;
+            if (index > -1) body.splice(index, 1);
+        } else if (selectedItem.type === 'mob') {
+            const index = selectedItem.index;
+            if (index > -1) mob.splice(index, 1);
+        }
+        selectedItem = null;
+        loop();
+    }
+});
+
+function findSelectedItem(cursor) {
+    let selectedItem = null;
+    let index = -1;
+    for (let i = 0; i < map.length; i++) {
+        const item = map[i];
+        if (cursor.x >= item.x && cursor.x <= item.x + item.width &&
+            cursor.y >= item.y && cursor.y <= item.y + item.height) {
+            index = i;
+            return { ...item, index, type: 'map' };
+        }
+    }
+    for (let i = 0; i < body.length; i++) {
+        const item = body[i];
+        if (cursor.x >= item.x && cursor.x <= item.x + item.width &&
+            cursor.y >= item.y && cursor.y <= item.y + item.height) {
+            index = i;
+            return { ...item, index, type: 'body' };
+        }
+    }
+    const radiusMob = 10 * 10;
+    for (let i = 0; i < mob.length; i++) {
+        const item = mob[i];
+        const dx = cursor.x - item.x;
+        const dy = cursor.y - item.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq <= radiusMob) {
+            index = i;
+            return { ...item, index, type: 'mob' };
+        }
+    }
+    const radiusDoor = 50 * 50;
+    const dxEnter = cursor.x - door.enter.x;
+    const dyEnter = cursor.y - door.enter.y;
+    if (dxEnter * dxEnter + dyEnter * dyEnter <= radiusDoor) {
+        return { ...door.enter, type: 'enter' };
+    }
+    const dxExit = cursor.x - door.exit.x;
+    const dyExit = cursor.y - door.exit.y;
+    if (dxExit * dxExit + dyExit * dyExit <= radiusDoor) {
+        return { ...door.exit, type: 'exit' };
+    }
+    return { item: null, index: -1 };
+}
+
+function drawAxes(size = 10000) {
+    const centerX = 0;
+    const centerY = 0;
+    ctx.beginPath();
+    ctx.moveTo(centerX - size, centerY);
+    ctx.lineTo(centerX + size, centerY);
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY - size);
+    ctx.lineTo(centerX, centerY + size);
+    ctx.stroke();
+    ctx.closePath();
+}
+
+function drawCoordinates() {
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
+    ctx.font = "20px Chakra Petch";
+    ctx.fillText(`(${(cursor.inGame.x).toFixed(1)}, ${(cursor.inGame.y).toFixed(1)})`, cursor.x, cursor.y - 20);
+}
+
+function handleMouseDown(e) {
+    cursor.startX = cursor.inGame.x;
+    cursor.startY = cursor.inGame.y;
+}
+
+function drawPreview(x, y, w, h, d = true) {
+    ctx.strokeStyle = d ? "blue" : "red";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function round(num, round = 25) {
+    return Math.round(num / round) * round;
+}
+
+function handleMouseUp(e) {
+    const x = round(cursor.inGame.x);
+    const y = round(cursor.inGame.y);
+    const startX = round(cursor.startX);
+    const startY = round(cursor.startY);
+    const width = round(x - startX);
+    const height = round(y - startY);
+    if (!width || !height) {
+        return;
+    }
+    if (selectedState === 'map') {
+        map.push({ x: Math.floor(startX), y: Math.floor(startY), width: Math.floor(width), height: Math.floor(height) });
+    } else if (selectedState === 'body') {
+        body.push({ x: Math.floor(startX), y: Math.floor(startY), width: Math.floor(width), height: Math.floor(height) });
+    } else if (selectedState === 'mob') {
+        mob.push({ x: Math.floor(startX), y: Math.floor(startY) });
+    } else {
+        //     spinner: [], //body
+        //     rotor: [], //body
+        //     boost: [], //map
+        //     elevator: [], //body
+        //     vanish: [], //special - body
+        //     drip: [], //cosmetic
+        //     hazard: [], //special - body
+        //     mover: [], //special - body
+        if (selectedState === 'spinner' || selectedState === 'rotor' || selectedState === 'vanish' || selectedState === 'hazard' || selectedState === 'mover') {
+            body.push({ x: Math.floor(startX), y: Math.floor(startY), width: Math.floor(width), height: Math.floor(height), type: selectedState });
+        } else if (selectedState === 'elevator') {
+            body.push({ x: Math.floor(startX), y: Math.floor(startY) + Math.floor(height) - 50, width: Math.floor(width), height: 50, type: selectedState, maxY: Math.floor(startY), maxHeight: Math.floor(height)})
+        }
+    }
+}
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(translateX + offsetX, translateY + offsetY);
+    ctx.scale(scale, scale);
+    drawAxes();
+    door.exit.draw();
+    door.enter.draw();
+    map.forEach(item => {
+        ctx.fillStyle = color.map;
+        ctx.fillRect(item.x, item.y, item.width, item.height);
+    });
+    body.forEach(item => {
+        if (item.type === 'spinner') {
+            ctx.fillStyle = color.block;
+            ctx.strokeStyle = color.blockS;
+            ctx.beginPath();
+            ctx.arc(item.x + item.width / 2, item.y + item.height / 2, 10, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if(item.type === 'rotor') {
+            ctx.fillStyle = color.block;
+            ctx.strokeStyle = color.blockS;
+            ctx.beginPath();
+            ctx.arc(item.x + item.width / 2, item.y + item.height / 2, 10, 0, Math.PI * 2);            
+            ctx.stroke();
+        } else if(item.type === 'elevator') {
+            ctx.fillStyle = color.block;
+            ctx.strokeStyle = color.blockS;
+            ctx.fillRect(item.x, item.y, item.width, item.height);
+            ctx.strokeRect(item.x, item.y, item.width, item.height);
+            
+            ctx.fillStyle = "#00000022";
+            ctx.strokeStyle = "transparent";
+            ctx.fillRect(item.x, item.y - item.maxHeight + 50, item.width, item.maxHeight);
+            ctx.strokeRect(item.x, item.maxHeight, item.width, item.maxHeight);
+            ctx.beginPath();
+            ctx.arc(item.x + item.width / 2, item.y + item.height / 2, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = "transparent";
+            ctx.strokeStyle = "transparent";
+        } else if(item.type === 'vanish') {
+            ctx.fillStyle = "#586370";
+            ctx.strokeStyle = "#586370";
+        } else if(item.type === 'hazard') {
+            ctx.fillStyle = "hsla(160, 100%, 35%,0.75)";
+            ctx.strokeStyle = "hsla(160, 100%, 35%,0.75)";
+        } else if(item.type === 'mover') {
+            ctx.fillStyle = "#000";
+            ctx.strokeStyle = "#000";
+        } else {
+            ctx.fillStyle = color.block;
+            ctx.strokeStyle = color.blockS;
+        }
+        ctx.fillRect(item.x, item.y, item.width, item.height);
+        ctx.strokeRect(item.x, item.y, item.width, item.height);
+    });
+    mob.forEach(item => {
+        ctx.beginPath();
+        ctx.fillStyle = "indigo";
+        ctx.arc(item.x, item.y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.closePath();
+    });
+    if (preview) {
+        drawPreview(preview.x, preview.y, preview.width, preview.height, preview.d);
+    }
+    if (selectedItem) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        if (selectedItem.type === 'mob' || selectedItem.type === 'enter' || selectedItem.type === 'exit') {
+            ctx.beginPath();
+            ctx.arc(selectedItem.x, selectedItem.y, 12, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.closePath();
+        } else {
+            ctx.strokeRect(selectedItem.x, selectedItem.y, selectedItem.width, selectedItem.height);
+        }
+    }
+    ctx.restore();
+    
+    drawCoordinates();
+
+    document.getElementById("zoom").innerHTML = "zoom: " + scale.toFixed(1);
+    const dropdown = document.getElementById("dropdown");
+    dropdown.options[1].text = `Map (${map.length})`;
+    let normBody = 0;
+    let diffBody = {
+        spinner: 0,
+        rotor: 0,
+        //boost: 0,
+        elevator: 0,
+        vanish: 0,
+        //drip: 0,
+        hazard: 0,
+        mover: 0,
+    };
+    for(let i = 0; i < body.length; i++) {
+        if(!body[i].type) {
+            normBody++;
+        } else {
+            diffBody[body[i].type]++;
+        }
+    }
+    dropdown.options[2].text = `Body (${normBody.length})`;
+    dropdown.options[3].text = `Mob (${mob.length})`;
+    dropdown.options[4].text = `Spinner (${diffBody.spinner})`;
+    dropdown.options[5].text = `Rotor (${diffBody.rotor})`;
+    dropdown.options[6].text = `Elevator (${diffBody.elevator})`;
+    dropdown.options[7].text = `Vanish (${diffBody.vanish})`;
+    dropdown.options[8].text = `Hazard (${diffBody.hazard})`;
+    dropdown.options[9].text = `Mover (${diffBody.mover})`;
+    // <option value="spinner">Spinner (0)</option>
+    // <option value="rotor">Rotor (0)</option>
+    // <!-- <option value="boost">Boost (0)</option> -->
+    // <option value="elevator">Elevator (0)</option>
+    // <option value="vanish">Vanish (0)</option>
+    // <!-- <option value="drip">Drip (0)</option> -->
+    // <option value="hazard">Hazard (0)</option>
+    // <option value="mover">Mover (0)</option>
+    requestAnimationFrame(loop);
+}
+document.getElementById("toolbar").addEventListener('click', (e) => {
+    if (e.target.id) {
+        document.querySelectorAll('#toolbar span').forEach(span => span.classList.remove('active'));
+        e.target.classList.add('active');
+        selectedState = e.target.id;
+    }
+});
+document.getElementById("dropdown").addEventListener('change', (e) => {
+    selectedState = e.target.value;
+    document.querySelectorAll('#toolbar span').forEach(span => span.classList.remove('active'));
+});
+loop();
+
+function swap() {
+    var x = document.getElementById("toolbar");
+    if (x.style.height === "3em") {
+        x.style.height = "0em";
+    } else {
+        x.style.height = "3em";
+    }
+}
+function extract() {
+    const name = prompt("What is the name of the map?", "template");
+    let extract = "";
+    let special = "";
+    let special2 = "";
+    for(let i = 0; i < map.length; i++) {
+        extract += `spawn.mapRect(${map[i].x}, ${map[i].y}, ${map[i].width}, ${map[i].height});
+        `;
+    }
+    for(let i = 0; i < body.length; i++) {
+        if (body[i].type === 'spinner') {
+            special += `const sp${i} = level.spinner(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            `;
+        } else if(body[i].type === 'rotor') {
+            special += `const ro${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            `;
+        } else if(body[i].type === 'elevator') {
+
+        } else if(body[i].type === 'vanish') {
+            special += `const va${i} = level.vanish(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            `;
+            special2 += `va${i}.query();
+            `;
+        } else if(body[i].type === 'hazard') {
+            special += `const ha${i} = level.hazard(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            `;
+            special2 += `ha${i}.query();
+            `;
+        } else if(body[i].type === 'mover') {
+            special += `const mo${i} = level.mover(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height});
+            `;
+            special2 += `mo${i}.push();
+            mo${i}.draw();
+            `;
+        } else {
+            extract += `spawn.bodyRect(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height});
+            `;
+        }
+    }
+    for(let i = 0; i < mob.length; i++) {
+        extract += `spawn.randomMob(${mob[i].x}, ${mob[i].y}});
+        `;
+    }
+    let text = `${name}() {
+        level.setPosToSpawn(${door.enter.x}, ${door.enter.y});
+        level.exit.x = ${door.exit.x};
+        level.exit.y = ${door.exit.y};
+        level.defaultZoom = 1800
+        simulation.zoomTransition(level.defaultZoom)
+        document.body.style.backgroundColor = "#d8dadf";
+        ${special}
+        ${extract}
+        level.custom = () => {
+            level.exit.drawAndCheck();
+
+            level.enter.draw();
+
+            ${special2}
+        };
+        level.customTopLayer = () => { };
+        powerUps.addResearchToLevel();
+    },`
+    copyToClipBoard(text);
+    alert(`The following has been copied to clipboard
+    ` + text);
+}
+function copyToClipBoard(value) { //stolen from landgreen, which in turn was probably stolen from somewhere else
+        const textAreaEle = document.createElement('textarea');
+        textAreaEle.style.border = '0';
+        textAreaEle.style.padding = '0';
+        textAreaEle.style.margin = '0';
+        textAreaEle.style.position = 'absolute';
+        textAreaEle.style.left = '-9999px';
+        textAreaEle.style.top = `0px`;
+        textAreaEle.value = value
+        document.body.appendChild(textAreaEle);
+        textAreaEle.focus();
+        textAreaEle.select();
+        try {
+            document.execCommand('copy');
+        } catch (err) {
+            console.log(err)
+        } finally {
+            document.body.removeChild(textAreaEle);
+        }
+    }
+</script>
+</html>

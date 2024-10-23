@@ -92,6 +92,7 @@
             <option value="mover">Mover (0)</option>
         </select>
         <button id="export" onclick="extract()">Export</button>
+        <button onclick="info()">Help</button>
     </div>
     <canvas id="canvas"></canvas>
 </body>
@@ -557,7 +558,7 @@ function loop() {
             diffBody[body[i].type]++;
         }
     }
-    dropdown.options[2].text = `Body (${normBody.length})`;
+    dropdown.options[2].text = `Body (${normBody})`;
     dropdown.options[3].text = `Mob (${mob.length})`;
     dropdown.options[4].text = `Spinner (${diffBody.spinner})`;
     dropdown.options[5].text = `Rotor (${diffBody.rotor})`;
@@ -590,10 +591,10 @@ loop();
 
 function swap() {
     var x = document.getElementById("toolbar");
-    if (x.style.height === "3em") {
-        x.style.height = "0em";
-    } else {
+    if (x.style.height === "0em") {
         x.style.height = "3em";
+    } else {
+        x.style.height = "0em";
     }
 }
 function extract() {
@@ -613,7 +614,10 @@ function extract() {
             special += `const ro${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
             `;
         } else if(body[i].type === 'elevator') {
-
+            special += `const el${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${50}, ${body[i].maxHeight}); 
+            `;
+            special2 += `el${i}.move();
+            `;
         } else if(body[i].type === 'vanish') {
             special += `const va${i} = level.vanish(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
             `;
@@ -663,24 +667,36 @@ function extract() {
     ` + text);
 }
 function copyToClipBoard(value) { //stolen from landgreen, which in turn was probably stolen from somewhere else
-        const textAreaEle = document.createElement('textarea');
-        textAreaEle.style.border = '0';
-        textAreaEle.style.padding = '0';
-        textAreaEle.style.margin = '0';
-        textAreaEle.style.position = 'absolute';
-        textAreaEle.style.left = '-9999px';
-        textAreaEle.style.top = `0px`;
-        textAreaEle.value = value
-        document.body.appendChild(textAreaEle);
-        textAreaEle.focus();
-        textAreaEle.select();
-        try {
-            document.execCommand('copy');
-        } catch (err) {
-            console.log(err)
-        } finally {
-            document.body.removeChild(textAreaEle);
-        }
+    const textAreaEle = document.createElement('textarea');
+    textAreaEle.style.border = '0';
+    textAreaEle.style.padding = '0';
+    textAreaEle.style.margin = '0';
+    textAreaEle.style.position = 'absolute';
+    textAreaEle.style.left = '-9999px';
+    textAreaEle.style.top = `0px`;
+    textAreaEle.value = value
+    document.body.appendChild(textAreaEle);
+    textAreaEle.focus();
+    textAreaEle.select();
+    try {
+        document.execCommand('copy');
+    } catch (err) {
+        console.log(err)
+    } finally {
+        document.body.removeChild(textAreaEle);
     }
+}
+function info() {
+    alert(`This map maker is intended to make lower quality maps fast. For making higher quality maps, you should learn javascript and code them yourself.
+    
+How to use this map maker?
+
+Clicking object select can select an object, and drag its "ghost" around, and to set it to it's new position, you press Enter. You can also delete them with the Backspace or Delete button.
+Right click drag is pan, and left click drag is drawing the item.
+You can choose the item from the dropdown at the top toolbar above.
+This map maker sometimes starts lagging after you leave it for too long for reasons that I don't know, so try to not leave it for too long.
+If you have questions, ask can me (_destined_) in https://discord.gg/EUVfEpgden
+    `);
+}
 </script>
 </html>

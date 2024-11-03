@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
 <head>
     <title>Map editor</title>
@@ -643,7 +644,7 @@ function extract() {
         extract += `spawn.randomMob(${mob[i].x}, ${mob[i].y}});
         `;
     }
-    let text = `${name}() {
+    let text = `${name}() { // made with map-maker
         level.setPosToSpawn(${door.enter.x}, ${door.enter.y});
         level.exit.x = ${door.exit.x};
         level.exit.y = ${door.exit.y};

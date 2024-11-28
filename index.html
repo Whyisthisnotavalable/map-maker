@@ -270,6 +270,7 @@ canvas.addEventListener('mouseup', (e) => {
 
 let zooming = false;
 canvas.addEventListener('wheel', (e) => {
+	e.preventDefault();
     const zoomAmount = e.deltaY * zoomSensitivity;
     const newScale = scale - zoomAmount;
     if (newScale > maxZoom || newScale < minZoom) return;
@@ -578,10 +579,10 @@ function loop() {
     requestAnimationFrame(loop);
 }
 document.getElementById("toolbar").addEventListener('click', (e) => {
-    if (e.target.id) {
+    if (e.target && e.target.tagName === 'SPAN') {
         document.querySelectorAll('#toolbar span').forEach(span => span.classList.remove('active'));
         e.target.classList.add('active');
-        selectedState = e.target.id;
+        selectedState = e.target.id; // This should be the ID of the selected span
     }
 });
 document.getElementById("dropdown").addEventListener('change', (e) => {

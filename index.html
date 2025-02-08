@@ -7,6 +7,7 @@
         html {
             font-family: "Chakra Petch" !important; /* Pusheen font :> */
             font-size: small;
+			touch-action: none;
         }
         #canvas {
             top: 0;
@@ -207,7 +208,7 @@ canvas.addEventListener('mousemove', (e) => {
     if (isPanning) {
         offsetX = e.clientX - startX;
         offsetY = e.clientY - startY;
-        loop();
+        //loop();
     }
 
     if (selectedState && e.buttons === 1 && !isPanning) {
@@ -221,6 +222,7 @@ canvas.addEventListener('mousemove', (e) => {
             const height = Math.abs(cursor.inGame.y - cursor.startY);
             preview = { x: round(x), y: round(y), width: round(width), height: round(height)};
         }
+		/*
         if (!isRedrawing) {
             isRedrawing = true;
             requestAnimationFrame(() => {
@@ -228,15 +230,16 @@ canvas.addEventListener('mousemove', (e) => {
                 isRedrawing = false;
             });
         }
+		*/
     }
 });
 
 canvas.addEventListener('mousedown', (e) => {
-    if (e.button === 2) {
+    if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
         isPanning = true;
         startX = e.clientX - offsetX;
         startY = e.clientY - offsetY;
-    } else if (e.button === 0) {
+    } else if (e.button === 0 && !e.shiftKey) {
         if (selectedState === 'select') {
             selectedItem = findSelectedItem(cursor.inGame);
             if (selectedItem) {
@@ -251,20 +254,20 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
-    if (e.button === 2) {
+    if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
         isPanning = false;
         translateX += offsetX;
         translateY += offsetY;
         offsetX = 0;
         offsetY = 0;
-    } else if (e.button === 0) {
+    } else if (e.button === 0 && !e.shiftKey) {
         if (isDragging) {
             isDragging = false;
         } else if (selectedState && selectedState !== 'select') {
             handleMouseUp(e);
         }
         preview = null;
-        loop();
+        //loop();
     }
 });
 
@@ -280,7 +283,7 @@ canvas.addEventListener('wheel', (e) => {
     translateX -= mouseX * (newScale - scale);
     translateY -= mouseY * (newScale - scale);
     scale = newScale;
-
+	/*
     if (!zooming) {
         zooming = true;
         requestAnimationFrame(() => {
@@ -288,6 +291,7 @@ canvas.addEventListener('wheel', (e) => {
             zooming = false;
         });
     }
+	*/
 });
 
 document.addEventListener('keydown', (e) => {
@@ -322,7 +326,7 @@ document.addEventListener('keydown', (e) => {
         selectedItem.dragOffsetX = null;
         selectedItem.dragOffsetY = null;
         selectedItem = null;
-        loop(); 
+        //loop(); 
     }
 
     if ((e.key === 'Backspace' || e.key === 'Delete') && selectedItem) {
@@ -337,7 +341,7 @@ document.addEventListener('keydown', (e) => {
             if (index > -1) mob.splice(index, 1);
         }
         selectedItem = null;
-        loop();
+        //loop();
     }
 });
 
@@ -601,6 +605,10 @@ function swap() {
 }
 function extract() {
     const name = prompt("What is the name of the map?", "template");
+	if(!name || name == "template") {
+		alert("You need to enter a valid name, or something other than template.");
+		return;
+	}
     let extract = "";
     let special = "";
     let special2 = "";
@@ -616,7 +624,7 @@ function extract() {
             special += `const ro${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
             `;
         } else if(body[i].type === 'elevator') {
-            special += `const el${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${50}, ${body[i].maxHeight}); 
+            special += `const el${i} = level.elevator(${body[i].x}, ${body[i].y}, ${body[i].width}, ${50}, ${-body[i].maxHeight}); 
             `;
             special2 += `el${i}.move();
             `;
@@ -642,7 +650,7 @@ function extract() {
         }
     }
     for(let i = 0; i < mob.length; i++) {
-        extract += `spawn.randomMob(${mob[i].x}, ${mob[i].y}});
+        extract += `spawn.randomMob(${mob[i].x}, ${mob[i].y});
         `;
     }
     let text = `${name}() { // made with map-maker

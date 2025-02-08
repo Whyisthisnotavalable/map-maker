@@ -182,7 +182,7 @@ let door = {
             ctx.stroke();
         }
     }
-    }
+}
 let preview = null;
 
 function setupCanvas() {
@@ -295,7 +295,53 @@ canvas.addEventListener('wheel', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+    if (e.key === 'z' && historyStack.length > 0) {
+        const prevState = historyStack.pop();
+        map = prevState.map;
+        body = prevState.body;
+        mob = prevState.mob;
+        door = prevState.door;
+        door.enter.draw = function() {
+            ctx.beginPath();
+            ctx.moveTo(door.enter.x, door.enter.y + 30);
+            ctx.lineTo(door.enter.x, door.enter.y - 80);
+            ctx.bezierCurveTo(door.enter.x, door.enter.y - 170, door.enter.x + 100, door.enter.y - 170, door.enter.x + 100, door.enter.y - 80);
+            ctx.lineTo(door.enter.x + 100, door.enter.y + 30);
+            ctx.lineTo(door.enter.x, door.enter.y + 30);
+            ctx.fillStyle = "#ccc";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = "#CCCCCC55";
+            ctx.strokeStyle = "#ccc";
+            ctx.lineWidth = 2;
+            ctx.moveTo(door.enter.x, door.enter.y + 30);
+            ctx.arc(door.enter.x, door.enter.y, 30, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        };
+        door.exit.draw = function() {
+            ctx.beginPath();
+            ctx.moveTo(door.exit.x, door.exit.y + 30);
+            ctx.lineTo(door.exit.x, door.exit.y - 80);
+            ctx.bezierCurveTo(door.exit.x, door.exit.y - 170, door.exit.x + 100, door.exit.y - 170, door.exit.x + 100, door.exit.y - 80);
+            ctx.lineTo(door.exit.x + 100, door.exit.y + 30);
+            ctx.lineTo(door.exit.x, door.exit.y + 30);
+            ctx.fillStyle = "#0ff";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.fillStyle = "#00FFFF55";
+            ctx.strokeStyle = "#0ff";
+            ctx.lineWidth = 2;
+            ctx.moveTo(door.exit.x, door.exit.y + 30);
+            ctx.arc(door.exit.x, door.exit.y, 30, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        };
+    }
     if (e.key === 'Enter' && selectedItem) {
+		saveState();
         if (selectedItem.type === 'map') {
             const index = selectedItem.index;
             if (index > -1) {
@@ -330,6 +376,7 @@ document.addEventListener('keydown', (e) => {
     }
 
     if ((e.key === 'Backspace' || e.key === 'Delete') && selectedItem) {
+		saveState();
         if (selectedItem.type === 'map') {
             const index = selectedItem.index;
             if (index > -1) map.splice(index, 1);
@@ -429,7 +476,21 @@ function round(num, round = 25) {
     return Math.round(num / round) * round;
 }
 
+let historyStack = [];
+function saveState() {
+    historyStack.push({
+        map: JSON.parse(JSON.stringify(map)),
+        body: JSON.parse(JSON.stringify(body)),
+        mob: JSON.parse(JSON.stringify(mob)),
+        door: {
+            enter: { x: door.enter.x, y: door.enter.y },
+            exit: { x: door.exit.x, y: door.exit.y }
+        }
+    });
+}
+
 function handleMouseUp(e) {
+	saveState();
     const x = round(cursor.inGame.x);
     const y = round(cursor.inGame.y);
     const startX = round(cursor.startX);
@@ -524,6 +585,27 @@ function loop() {
         ctx.fill();
         ctx.closePath();
     });
+	ctx.setLineDash([10, 10]);
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    
+    ctx.beginPath();
+    ctx.moveTo(door.enter.x + 50, door.enter.y);
+    ctx.lineTo(door.exit.x + 50, door.exit.y);
+    ctx.stroke();
+	
+	const centerX = (door.enter.x + door.exit.x) / 2 + 50; 
+    const minY = Math.min(door.enter.y, door.exit.y);
+    const maxY = Math.max(door.enter.y, door.exit.y);
+	
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, minY - 50);
+    ctx.lineTo(centerX, maxY + 50);
+    ctx.stroke();
+	
+	ctx.setLineDash([]);
     if (preview) {
         drawPreview(preview.x, preview.y, preview.width, preview.height, preview.d);
     }
@@ -582,11 +664,27 @@ function loop() {
     // <option value="mover">Mover (0)</option>
     requestAnimationFrame(loop);
 }
+let previousState = null;
 document.getElementById("toolbar").addEventListener('click', (e) => {
     if (e.target && e.target.tagName === 'SPAN') {
-        document.querySelectorAll('#toolbar span').forEach(span => span.classList.remove('active'));
-        e.target.classList.add('active');
-        selectedState = e.target.id; // This should be the ID of the selected span
+        const objectSelect = document.getElementById("select");
+
+        if (e.target.id === "select") {
+            if (selectedState === "select") {
+                selectedState = previousState || "none";
+                objectSelect.classList.remove("active");
+            } else {
+                previousState = selectedState;
+                selectedState = "select";
+                objectSelect.classList.add("active");
+            }
+        } else {
+            previousState = selectedState;
+            selectedState = e.target.id;
+            
+            document.querySelectorAll('#toolbar span').forEach(span => span.classList.remove('active'));
+            e.target.classList.add('active');
+        }
     }
 });
 document.getElementById("dropdown").addEventListener('change', (e) => {
@@ -618,19 +716,21 @@ function extract() {
     }
     for(let i = 0; i < body.length; i++) {
         if (body[i].type === 'spinner') {
-            special += `const sp${i} = level.spinner(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            special += `const sp${i} = level.spinner(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height});
             `;
         } else if(body[i].type === 'rotor') {
-            special += `const ro${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
+            special += `const ro${i} = level.rotor(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height});
             `;
         } else if(body[i].type === 'elevator') {
-            special += `const el${i} = level.elevator(${body[i].x}, ${body[i].y}, ${body[i].width}, ${50}, ${-body[i].maxHeight}); 
-            `;
+            special += `const el${i} = level.elevator(${body[i].x}, ${body[i].y}, ${body[i].width}, ${50}, ${body[i].y - body[i].maxHeight + 50});
+			`;
             special2 += `el${i}.move();
+			`;
+			special2 +=  `el${i}.drawTrack();
             `;
         } else if(body[i].type === 'vanish') {
-            special += `const va${i} = level.vanish(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height}); 
-            `;
+            special += `const va${i} = level.vanish(${body[i].x}, ${body[i].y}, ${body[i].width}, ${body[i].height});
+			`;
             special2 += `va${i}.query();
             `;
         } else if(body[i].type === 'hazard') {
@@ -654,7 +754,7 @@ function extract() {
         `;
     }
     let text = `${name}() { // made with map-maker
-        level.setPosToSpawn(${door.enter.x}, ${door.enter.y});
+        level.setPosToSpawn(${door.enter.x + 50}, ${door.enter.y - 20});
         level.exit.x = ${door.exit.x};
         level.exit.y = ${door.exit.y};
         level.defaultZoom = 1800
@@ -698,13 +798,21 @@ function copyToClipBoard(value) { //stolen from landgreen, which in turn was pro
 }
 function info() {
     alert(`This map maker is intended to make lower quality maps fast. For making higher quality maps, you should learn javascript and code them yourself.
-    
-How to use this map maker?
-
-Clicking object select can select an object, and drag its "ghost" around, and to set it to it's new position, you press Enter. You can also delete them with the Backspace or Delete button.
-Right click drag is pan, and left click drag is drawing the item. Scroll to zoom.
-You can choose the item from the dropdown at the top toolbar above.
-This map maker sometimes starts lagging after you leave it for too long for reasons that I don't know, so try to not leave it for too long.
+Instructions:
+  - Pan the view: 
+    - Right-click and drag
+    - Shift + left-click and drag
+  - Zoom in/out: Scroll wheel
+  - Set entry and exit points
+  - Toolbar buttons:
+    - Object Select: Select objects on the canvas
+    - Object Type: Choose different object types (Map, Body, Mob, Spinner, Rotor, Elevator, Vanish, Hazard, Mover)
+    - Export: Export the map as code
+    - Help: Show this help dialog
+  - Keys:
+    - z: Undo the last action
+    - Enter: Confirm position of selected item
+    - Backspace/Delete: Delete selected item
 If you have questions, ask can me (_destined_) in https://discord.gg/EUVfEpgden
     `);
 }
